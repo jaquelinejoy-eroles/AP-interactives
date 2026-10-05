@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Coordinate Quest: An Inductive Geography Interactive</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            ocean: '#0f2744',
+            land: '#234a36',
+            landHover: '#2e6147',
+            gold: '#fbbf24',
+            gridBlue: 'rgba(56, 189, 248, 0.25)',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom Map styling & animations */
+    .map-graticule { stroke: rgba(148, 163, 184, 0.22); stroke-dasharray: 3 3; }
+    .map-equator { stroke: #ef4444; stroke-width: 2.2; stroke-dasharray: 6 3; }
+    .map-meridian { stroke: #3b82f6; stroke-width: 2.2; stroke-dasharray: 6 3; }
+    .pin-pulse { animation: pinGlow 1.8s infinite; }
+    @keyframes pinGlow {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.35); opacity: 0.7; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scroll::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans flex flex-col antialiased selection:bg-amber-500 selection:text-slate-950">
+
+  <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-50 px-4 lg:px-8 py-3.5">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-sky-500 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-amber-500/20">
+          <svg class="w-6 h-6 text-slate-950" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path>
+            <path d="M2 12h20"></path>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-lg md:text-xl font-bold tracking-tight text-white flex items-center gap-2">
+            Coordinate Quest
+            <span class="text-xs px-2 py-0.5 rounded-full bg-amber-400/10 text-amber-400 border border-amber-400/20 font-medium">Inductive Lab</span>
+          </h1>
+          <p class="text-xs text-slate-400">Discover geographical coordinates through observation and pattern deduction</p>
+        </div>
+      </div>
+
+      <!-- Phase Progress Indicator -->
+      <div class="flex items-center gap-1.5 sm:gap-2 self-start md:self-auto overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
+        <button onclick="switchPhase(1)" id="step-btn-1" class="phase-tab px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all bg-amber-500 text-slate-950 shadow-md">
+          <span class="w-4 h-4 rounded-full bg-slate-950/20 flex items-center justify-center text-[10px]">1</span> Explore
+        </button>
+        <button onclick="switchPhase(2)" id="step-btn-2" class="phase-tab px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all bg-slate-800 text-slate-400 hover:text-slate-200">
+          <span class="w-4 h-4 rounded-full bg-slate-700 flex items-center justify-center text-[10px]">2</span> Hypothesize
+        </button>
+        <button onclick="switchPhase(3)" id="step-btn-3" class="phase-tab px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all bg-slate-800 text-slate-400 hover:text-slate-200">
+          <span class="w-4 h-4 rounded-full bg-slate-700 flex items-center justify-center text-[10px]">3</span> Test
+        </button>
+        <button onclick="switchPhase(4)" id="step-btn-4" class="phase-tab px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all bg-slate-800 text-slate-400 hover:text-slate-200">
+          <span class="w-4 h-4 rounded-full bg-slate-700 flex items-center justify-center text-[10px]">4</span> Apply
+        </button>
+        <button onclick="switchPhase(5)" id="step-btn-5" class="phase-tab px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all bg-slate-800 text-slate-400 hover:text-slate-200">
+          <span class="w-4 h-4 rounded-full bg-slate-700 flex items-center justify-center text-[10px]">5</span> Conclude
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col gap-6">
+
+    <!-- Top Guidance Banner (Dynamic per Phase) -->
+    <section id="phase-banner" class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 relative overflow-hidden">
+      <div class="absolute -right-8 -top-8 w-36 h-36 bg-amber-500/10 rounded-full blur-2xl pointer-events-none"></div>
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <span id="banner-tag" class="text-xs uppercase tracking-wider font-bold text-amber-400">Phase 1: Exploration</span>
+          <h2 id="banner-title" class="text-lg sm:text-xl font-bold text-white mt-0.5">Investigate the Numbers</h2>
+          <p id="banner-desc" class="text-sm text-slate-300 mt-1">Click preset city pins or click anywhere on the world map. Watch how the numbers change as you move North, South, East, and West.</p>
+        </div>
+        <div class="flex items-center gap-3 shrink-0">
+          <div class="px-3.5 py-2 rounded-xl bg-slate-800/80 border border-slate-700 text-right">
+            <div class="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">Inquiry Score</div>
+            <div id="quest-score" class="text-base font-bold font-mono text-emerald-400">0 pts</div>
+          </div>
+          <button id="next-phase-cta" onclick="advanceToNextPhase()" class="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-semibold rounded-xl text-sm transition-all shadow-md flex items-center gap-2">
+            <span>Next Phase</span>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Workspace Grid: Map Area + Context Control Sidebar -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      
+      <div class="lg:col-span-8 bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col shadow-xl relative">
+        <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <h3 class="text-sm font-semibold text-slate-200">Interactive Coordinate Sphere (Equirectangular Projection)</h3>
+          </div>
+          
+          <!-- Map Layer Controls -->
+          <div class="flex items-center gap-2 text-xs">
+            <label class="flex items-center gap-1.5 cursor-pointer bg-slate-800/70 hover:bg-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-700 transition">
+              <input type="checkbox" id="toggle-equator" checked onchange="renderMapLayers()" class="rounded accent-red-500">
+              <span class="text-red-400 font-medium">Equator (0°)</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer bg-slate-800/70 hover:bg-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-700 transition">
+              <input type="checkbox" id="toggle-meridian" checked onchange="renderMapLayers()" class="rounded accent-blue-500">
+              <span class="text-sky-400 font-medium">Prime Meridian (0°)</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer bg-slate-800/70 hover:bg-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-700 transition">
+              <input type="checkbox" id="toggle-grid" checked onchange="renderMapLayers()" class="rounded accent-slate-400">
+              <span class="text-slate-300">Graticule Grid</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- SVG Map Container (800x400 aspect ratio) -->
+        <div class="relative w-full aspect-[2/1] bg-[#0c1a2e] rounded-xl overflow-hidden border border-slate-800 select-none shadow-inner group">
+          <svg id="world-map-svg" viewBox="0 0 800 400" class="w-full h-full cursor-crosshair" onclick="handleMapClick(event)">
+            <!-- Ocean Background with subtle gradient -->
+            <defs>
+              <linearGradient id="oceanGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#0a192f"/>
+                <stop offset="100%" stop-color="#071324"/>
+              </linearGradient>
+              <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="3" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+            </defs>
+            <rect width="800" height="400" fill="url(#oceanGrad)"/>
+
+            <!-- Graticule Grid Lines (Dynamic via JS) -->
+            <g id="layer-grid"></g>
+
+            <!-- World Continents (Simplified High-Fidelity SVG Paths) -->
+            <g id="layer-landmass" class="fill-[#1b382b] stroke-[#2d5945] stroke-[0.8] transition-colors">
+              <!-- North & Central America -->
+              <path d="M120 70 L145 60 L180 58 L210 70 L250 85 L225 105 L215 130 L195 140 L190 170 L170 185 L145 180 L135 150 L110 135 L95 100 Z" />
+              <path d="M170 185 L180 205 L195 215 L190 230 L180 230 L168 200 Z" /> <!-- Central America -->
+              <!-- Greenland & Arctic Islands -->
+              <path d="M260 40 L310 38 L320 65 L285 75 L260 55 Z" />
+              <!-- South America -->
+              <path d="M185 230 L220 220 L260 240 L275 280 L250 330 L230 365 L215 350 L205 290 L180 250 Z" />
+              <!-- Europe -->
+              <path d="M375 75 L420 70 L430 90 L450 95 L445 130 L400 135 L370 130 L365 110 L375 90 Z" />
+              <!-- Scandinavia & British Isles -->
+              <path d="M400 50 L425 45 L430 80 L405 85 Z" />
+              <path d="M365 80 L380 75 L375 100 L360 95 Z" />
+              <!-- Africa -->
+              <path d="M360 140 L430 140 L460 175 L490 225 L450 290 L420 325 L380 325 L350 250 L340 180 Z" />
+              <!-- Madagascar -->
+              <path d="M485 285 L495 290 L485 320 L475 315 Z" />
+              <!-- Asia -->
+              <path d="M450 85 L530 65 L610 60 L680 75 L710 110 L680 150 L640 160 L610 145 L580 170 L550 215 L525 210 L505 160 L470 150 L450 120 Z" />
+              <!-- Indian Subcontinent -->
+              <path d="M530 165 L570 175 L555 235 L535 220 Z" />
+              <!-- East & SE Asia & Philippines -->
+              <path d="M605 160 L650 165 L640 210 L610 230 L595 200 Z" />
+              <path d="M640 200 L655 200 L650 230 L635 225 Z" fill="#2d6a4f" class="hover:fill-amber-400 transition" /> <!-- Philippines Highlight -->
+              <!-- Japan -->
+              <path d="M690 125 L710 140 L700 165 L685 150 Z" />
+              <!-- Australia & Oceania -->
+              <path d="M620 270 L700 260 L730 300 L710 350 L640 350 L610 310 Z" />
+              <path d="M720 345 L745 350 L735 375 L715 365 Z" /> <!-- New Zealand -->
+              <!-- Antarctica -->
+              <path d="M50 385 L750 385 L750 400 L50 400 Z" />
+            </g>
+
+            <!-- Equator & Prime Meridian Overlays -->
+            <g id="layer-equator-meridian">
+              <line id="svg-equator" x1="0" y1="200" x2="800" y2="200" class="map-equator" />
+              <line id="svg-meridian" x1="400" y1="0" x2="400" y2="400" class="map-meridian" />
+            </g>
+
+            <!-- Target markers & Mission hotspots -->
+            <g id="layer-preset-pins"></g>
+            <g id="layer-active-pin"></g>
+            <g id="layer-challenge-targets"></g>
+          </svg>
+
+          <!-- Dynamic Crosshair Overlay Badge on Hover -->
+          <div id="map-hover-coords" class="pointer-events-none absolute bottom-3 left-3 bg-slate-900/90 backdrop-blur border border-slate-700/80 px-2.5 py-1 rounded text-[11px] font-mono text-slate-300">
+            Hover to scan coordinates
+          </div>
+
+          <!-- Compass Rose Indicator -->
+          <div class="absolute top-3 right-3 bg-slate-900/80 backdrop-blur border border-slate-800 p-2 rounded-xl text-center pointer-events-none shadow-md">
+            <div class="text-[10px] font-bold text-amber-400">N</div>
+            <div class="flex items-center gap-1.5 my-0.5">
+              <span class="text-[9px] font-bold text-slate-400">W</span>
+              <div class="w-3 h-3 rounded-full border border-slate-600 flex items-center justify-center">
+                <div class="w-1 h-1 bg-amber-400 rounded-full"></div>
+              </div>
+              <span class="text-[9px] font-bold text-slate-400">E</span>
+            </div>
+            <div class="text-[10px] font-bold text-slate-400">S</div>
+          </div>
+        </div>
+
+        <div class="mt-4 grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+          <!-- Live Coordinate telemetry badge -->
+          <div class="sm:col-span-7 bg-slate-950/80 border border-slate-800 rounded-xl p-3 flex items-center justify-around">
+            <div class="text-center">
+              <div class="text-[11px] font-medium text-slate-400 flex items-center justify-center gap-1">
+                <span class="w-2 h-2 rounded-full bg-red-400"></span>
+                Latitude (Lat)
+              </div>
+              <div id="readout-lat" class="text-xl sm:text-2xl font-mono font-bold text-red-400 tracking-tight">0.0° EQ</div>
+              <div id="lat-hint" class="text-[10px] text-slate-500 font-mono">Distance North/South</div>
+            </div>
+
+            <div class="h-10 w-px bg-slate-800"></div>
+
+            <div class="text-center">
+              <div class="text-[11px] font-medium text-slate-400 flex items-center justify-center gap-1">
+                <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+                Longitude (Lng)
+              </div>
+              <div id="readout-lng" class="text-xl sm:text-2xl font-mono font-bold text-sky-400 tracking-tight">0.0° PM</div>
+              <div id="lng-hint" class="text-[10px] text-slate-500 font-mono">Distance East/West</div>
+            </div>
+          </div>
+
+          <!-- Nudge Directional Pad to demonstrate numerical ticking -->
+          <div class="sm:col-span-5 flex items-center justify-between sm:justify-end gap-2 bg-slate-800/40 p-2 rounded-xl border border-slate-800">
+            <span class="text-xs text-slate-400 font-medium px-1">Nudge Pin:</span>
+            <div class="grid grid-cols-3 gap-1 w-28">
+              <div></div>
+              <button onclick="nudgeActivePin(10, 0)" title="Nudge North" class="h-8 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 font-bold text-xs flex items-center justify-center transition active:scale-95">▲ N</button>
+              <div></div>
+              <button onclick="nudgeActivePin(0, -15)" title="Nudge West" class="h-8 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 font-bold text-xs flex items-center justify-center transition active:scale-95">◀ W</button>
+              <button onclick="resetPinToZero()" title="Center on Null Island (0,0)" class="h-8 bg-slate-800 hover:bg-slate-700 rounded text-amber-400 font-bold text-[10px] flex items-center justify-center border border-amber-400/30">0,0</button>
+              <button onclick="nudgeActivePin(0, 15)" title="Nudge East" class="h-8 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 font-bold text-xs flex items-center justify-center transition active:scale-95">E ▶</button>
+              <div></div>
+              <button onclick="nudgeActivePin(-10, 0)" title="Nudge South" class="h-8 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 font-bold text-xs flex items-center justify-center transition active:scale-95">▼ S</button>
+              <div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Presets Bar for Instant Exploration -->
+        <div class="mt-3 pt-3 border-t border-slate-800 flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+          <span class="text-slate-400 font-medium shrink-0">Sample Points:</span>
+          <div class="flex gap-1.5" id="preset-buttons-container"></div>
+        </div>
+      </div>
+
+      <div class="lg:col-span-4 flex flex-col gap-4">
+
+        <!-- ================= PHASE 1 CONTAINER ================= -->
+        <div id="phase-card-1" class="phase-container bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col gap-4">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+              <span class="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center text-xs font-mono font-bold">1</span>
+              Discovery Observations
+            </h4>
+            <span class="text-xs text-slate-400">Step 1 of 5</span>
+          </div>
+
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Click on several sample cities or click freely on the globe. Record at least 3 points to observe the coordinate numbers.
+          </p>
+
+          <!-- Observation Log List -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between text-xs text-slate-400 font-semibold">
+              <span>Your Exploration Log</span>
+              <span id="log-count" class="font-mono text-amber-400">0 / 3 logged</span>
+            </div>
+            <div id="observation-log" class="custom-scroll max-h-56 overflow-y-auto space-y-1.5 pr-1">
+              <div class="text-xs text-slate-500 italic p-3 text-center bg-slate-950/50 rounded-xl border border-dashed border-slate-800">
+                Click map locations to log coordinate pairs here.
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-amber-950/20 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-200">
+            <strong class="font-semibold block mb-1">Key Questions to Ponder:</strong>
+            <ul class="list-disc list-inside space-y-1 text-amber-300/80 text-[11px]">
+              <li>What happens to the red number when you move North vs. South?</li>
+              <li>What happens to the blue number when you move East vs. West?</li>
+              <li>What is the coordinate value at the intersection of the two main lines?</li>
+            </ul>
+          </div>
+
+          <button onclick="switchPhase(2)" class="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition shadow-md flex items-center justify-center gap-2">
+            Ready to Formulate Rules &rarr;
+          </button>
+        </div>
+
+        <!-- ================= PHASE 2 CONTAINER ================= -->
+        <div id="phase-card-2" class="phase-container hidden bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col gap-4">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+              <span class="w-6 h-6 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center text-xs font-mono font-bold">2</span>
+              Hypothesis Builder
+            </h4>
+            <span class="text-xs text-slate-400">Step 2 of 5</span>
+          </div>
+
+          <p class="text-xs text-slate-300">
+            Synthesize what you noticed during exploration by completing these inductive reasoning prompts:
+          </p>
+
+          <!-- Prompt 1 -->
+          <div class="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-2">
+            <label class="text-xs font-medium text-slate-200 block">
+              1. As you move <strong class="text-amber-300">NORTH</strong> of the Equator (0°), the Latitude number:
+            </label>
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <button onclick="checkHypothesisItem(1, 'increases', this)" class="hypo-opt-1 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 border border-slate-700 transition">Increases (°N)</button>
+              <button onclick="checkHypothesisItem(1, 'decreases', this)" class="hypo-opt-1 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 border border-slate-700 transition">Decreases (°S)</button>
+            </div>
+            <div id="hypo-feedback-1" class="text-[11px] hidden font-medium"></div>
+          </div>
+
+          <!-- Prompt 2 -->
+          <div class="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-2">
+            <label class="text-xs font-medium text-slate-200 block">
+              2. Which coordinate tells you whether a location is <strong class="text-amber-300">North or South</strong>?
+            </label>
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <button onclick="checkHypothesisItem(2, 'first', this)" class="hypo-opt-2 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 border border-slate-700 transition">First number (Latitude)</button>
+              <button onclick="checkHypothesisItem(2, 'second', this)" class="hypo-opt-2 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 border border-slate-700 transition">Second number (Longitude)</button>
+            </div>
+            <div id="hypo-feedback-2" class="text-[11px] hidden font-medium"></div>
+          </div>
+
+          <!-- Hypothesis Statement Assembly -->
+          <div class="bg-slate-950/90 p-3 rounded-xl border border-slate-800 space-y-2">
+            <label class="text-xs font-semibold text-sky-400 block uppercase tracking-wide">Construct Your Working Rule</label>
+            <p class="text-xs text-slate-300 leading-relaxed">
+              "The <select id="rule-select-1" class="bg-slate-800 border border-slate-700 text-amber-300 rounded px-1.5 py-0.5 text-xs">
+                <option value="">[choose]</option>
+                <option value="first">first (Latitude)</option>
+                <option value="second">second (Longitude)</option>
+              </select> coordinate measures distance from the Equator (North/South), while the 
+              <select id="rule-select-2" class="bg-slate-800 border border-slate-700 text-amber-300 rounded px-1.5 py-0.5 text-xs">
+                <option value="">[choose]</option>
+                <option value="first">first</option>
+                <option value="second">second (Longitude)</option>
+              </select> coordinate measures distance from the Prime Meridian (East/West)."
+            </p>
+            <button onclick="validateMasterRule()" class="w-full mt-2 py-1.5 bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg text-xs transition">
+              Verify My Rule
+            </button>
+            <div id="rule-feedback" class="text-xs font-semibold hidden"></div>
+          </div>
+
+          <div class="flex gap-2">
+            <button onclick="switchPhase(1)" class="w-1/3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs transition">Back</button>
+            <button onclick="switchPhase(3)" id="btn-to-phase-3" class="w-2/3 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition">Advance to Test &rarr;</button>
+          </div>
+        </div>
+
+        <!-- ================= PHASE 3 CONTAINER ================= -->
+        <div id="phase-card-3" class="phase-container hidden bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col gap-4">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+              <span class="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-mono font-bold">3</span>
+              Rule Testing Lab
+            </h4>
+            <span class="text-xs text-slate-400">Step 3 of 5</span>
+          </div>
+
+          <p class="text-xs text-slate-300">
+            Let's put your derived rule to the test with quick predictions!
+          </p>
+
+          <!-- Current Test Question Box -->
+          <div id="test-question-box" class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-amber-400 font-semibold uppercase tracking-wider text-[10px]" id="test-counter">Test 1 of 3</span>
+              <span class="font-mono text-xs text-slate-400" id="test-streak">Accuracy: 100%</span>
+            </div>
+
+            <div id="test-target-desc" class="text-sm font-semibold text-white">
+              Loading test challenge...
+            </div>
+
+            <div id="test-options-grid" class="grid grid-cols-2 gap-2 text-xs pt-1">
+              <!-- Dynamically populated choices -->
+            </div>
+
+            <div id="test-explanation" class="text-xs p-2.5 rounded-lg hidden font-medium"></div>
+          </div>
+
+          <div class="flex gap-2">
+            <button onclick="switchPhase(2)" class="w-1/3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs transition">Revise Rule</button>
+            <button onclick="switchPhase(4)" id="btn-to-phase-4" class="w-2/3 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition">Go to Missions &rarr;</button>
+          </div>
+        </div>
+
+        <!-- ================= PHASE 4 CONTAINER ================= -->
+        <div id="phase-card-4" class="phase-container hidden bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col gap-4">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+              <span class="w-6 h-6 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center text-xs font-mono font-bold">4</span>
+              Discover & Apply Missions
+            </h4>
+            <span class="text-xs text-slate-400">Step 4 of 5</span>
+          </div>
+
+          <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+            <div class="flex items-center justify-between">
+              <span id="mission-badge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30 uppercase tracking-wider">Mission 1</span>
+              <span id="mission-progress-label" class="text-xs font-mono text-amber-400">1 / 4 Completed</span>
+            </div>
+
+            <h5 id="mission-title" class="text-sm font-bold text-white">Target Coordinate Lock</h5>
+            <p id="mission-prompt" class="text-xs text-slate-300 leading-relaxed"></p>
+
+            <div id="mission-action-area" class="pt-2">
+              <!-- Dynamically populated mission interaction options or map click alerts -->
+            </div>
+
+            <div id="mission-feedback" class="text-xs p-2.5 rounded-lg hidden font-medium"></div>
+          </div>
+
+          <div class="flex gap-2">
+            <button onclick="switchPhase(3)" class="w-1/3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs transition">Back</button>
+            <button onclick="switchPhase(5)" id="btn-to-phase-5" class="w-2/3 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition">Final Synthesis &rarr;</button>
+          </div>
+        </div>
+
+        <!-- ================= PHASE 5 CONTAINER ================= -->
+        <div id="phase-card-5" class="phase-container hidden bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col gap-4">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+              <span class="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-mono font-bold">5</span>
+              Conclusion & Mastery
+            </h4>
+            <span class="text-xs text-slate-400">Step 5 of 5</span>
+          </div>
+
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Consolidate your inductive findings into a formal geographical generalization:
+          </p>
+
+          <form id="synthesis-form" onsubmit="handleSynthesisSubmit(event)" class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3 text-xs leading-relaxed text-slate-200">
+            <p>
+              "Based on my observations, <strong>Latitude</strong> lines run horizontally and measure distance 
+              <select id="syn-lat-dir" required class="bg-slate-800 border border-slate-700 text-amber-300 rounded px-1.5 py-1">
+                <option value="">[direction]</option>
+                <option value="ns">North or South</option>
+                <option value="ew">East or West</option>
+              </select> 
+              from the 
+              <select id="syn-lat-ref" required class="bg-slate-800 border border-slate-700 text-amber-300 rounded px-1.5 py-1">
+                <option value="">[reference line]</option>
+                <option value="eq">Equator (0°)</option>
+                <option value="pm">Prime Meridian (0°)</option>
+              </select>."
+            </p>
+
+            <p>
+              "Meanwhile, <strong>Longitude</strong> lines run vertically and measure distance 
+              <select id="syn-lng-dir" required class="bg-slate-800 border border-slate-700 text-amber-300 rounded px-1.5 py-1">
+                <option value="">[direction]</option>
+                <option value="ns">North or South</option>
+                <option value="ew">East or West</option>
+              </select> 
+              from the 
+              <select id="syn-lng-ref" required class="bg-slate-800 border border-slate-700 text-amber-300 rounded px-1.5 py-1">
+                <option value="">[reference line]</option>
+                <option value="eq">Equator (0°)</option>
+                <option value="pm">Prime Meridian (0°)</option>
+              </select>."
+            </p>
+
+            <button type="submit" class="w-full py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition shadow-lg mt-2">
+              Generate Certificate of Mastery
+            </button>
+          </form>
+
+          <div id="certificate-output" class="hidden"></div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <script>
+    /* Global Application State */
+    const state = {
+      currentPhase: 1,
+      score: 0,
+      activeCoords: { lat: 14.6, lng: 121.0 }, // default: Manila
+      loggedPoints: [],
+      
+      // Phase 2 hypothesis checklist
+      hypoChecks: { q1: false, q2: false, ruleMastered: false },
+      
+      // Phase 3 Testing state
+      currentTestIdx: 0,
+      testCorrectCount: 0,
+      
+      // Phase 4 Mission state
+      currentMissionIdx: 0,
+      missionCompletedCount: 0,
+      targetRadiusTolerance: 15, // deg tolerance for clicks
+    };
+
+    /* Preset Locations for Exploration */
+    const PRESETS = [
+      { name: "Manila", lat: 14.6, lng: 120.98, desc: "Philippines (Southeast Asia)" },
+      { name: "Oslo", lat: 59.91, lng: 10.75, desc: "Norway (Northern Europe)" },
+      { name: "Nairobi", lat: -1.29, lng: 36.82, desc: "Kenya (East Africa)" },
+      { name: "Quito", lat: -0.18, lng: -78.46, desc: "Ecuador (South America)" },
+      { name: "Tokyo", lat: 35.67, lng: 139.65, desc: "Japan (East Asia)" },
+      { name: "Buenos Aires", lat: -34.60, lng: -58.38, desc: "Argentina (South America)" },
+      { name: "London", lat: 51.50, lng: -0.12, desc: "UK (Prime Meridian Royal Obs.)" },
+    ];
+
+    /* Phase 3 Testing Questions */
+    const TESTS = [
+      {
+        question: "A ship is positioned at (Lat: 45°N, Lng: 120°W). Which hemisphere combination is it in?",
+        options: [
+          { text: "Northern & Western Hemispheres", correct: true },
+          { text: "Southern & Eastern Hemispheres", correct: false },
+          { text: "Northern & Eastern Hemispheres", correct: false },
+          { text: "Southern & Western Hemispheres", correct: false }
+        ],
+        explanation: "45°N places it North of the Equator; 120°W places it West of the Prime Meridian."
+      },
+      {
+        question: "Look at the Equator (red dashed line). If a point is located on the Equator, what is its Latitude?",
+        options: [
+          { text: "90°", correct: false },
+          { text: "0°", correct: true },
+          { text: "180°", correct: false },
+          { text: "45°", correct: false }
+        ],
+        explanation: "The Equator is the 0° starting baseline for measuring North and South latitude."
+      },
+      {
+        question: "Which coordinate pair could represent a point located in the Southern & Eastern hemispheres?",
+        options: [
+          { text: "25°N, 40°W", correct: false },
+          { text: "30°S, 80°E", correct: true },
+          { text: "15°N, 100°E", correct: false },
+          { text: "60°S, 140°W", correct: false }
+        ],
+        explanation: "Latitude has 'S' (South of Equator) and Longitude has 'E' (East of Prime Meridian)."
+      }
+    ];
+
+    /* Phase 4 Applied Missions */
+    const MISSIONS = [
+      {
+        id: "m1",
+        title: "Mission 1: The Zero-Point Intersection",
+        prompt: "Where do the Equator (0°) and the Prime Meridian (0°) intersect? Click as close as possible to (0°, 0°) in the Gulf of Guinea off the coast of Africa.",
+        targetLat: 0,
+        targetLng: 0,
+        type: "click",
+        tolerance: 15,
+        hint: "Find where the red dashed line crosses the blue dashed line."
+      },
+      {
+        id: "m2",
+        title: "Mission 2: Locate the Philippines",
+        prompt: "Using coordinate clues (Approx. 13°N to 15°N, 120°E to 125°E), click on the Philippine archipelago in Southeast Asia.",
+        targetLat: 13.5,
+        targetLng: 122.5,
+        type: "click",
+        tolerance: 14,
+        hint: "Look North of the Equator and East of the Prime Meridian in the Western Pacific."
+      },
+      {
+        id: "m3",
+        title: "Mission 3: High Latitude Arctic Station",
+        prompt: "A research station is located at 60°N, 10°E (near Oslo, Scandinavia). Click on Northern Europe matching this coordinate.",
+        targetLat: 60,
+        targetLng: 10,
+        type: "click",
+        tolerance: 16,
+        hint: "Move far North of the Equator, just slightly East of the Prime Meridian."
+      },
+      {
+        id: "m4",
+        title: "Mission 4: South American Equator City",
+        prompt: "Quito, Ecuador sits almost exactly on the Equator at Lat: 0.2°S, Lng: 78.5°W. Click near the equator on the western edge of South America.",
+        targetLat: -0.2,
+        targetLng: -78.5,
+        type: "click",
+        tolerance: 18,
+        hint: "Follow the red Equator line to the Pacific side of South America."
+      }
+    ];
+
+    /**
+     * Converts Latitude and Longitude to SVG (X, Y) coordinates.
+     * SVG ViewBox: 800 width, 400 height.
+     * Longitude: -180 to 180 maps to 0 to 800.
+     * Latitude: 90 to -90 maps to 0 to 400.
+     */
+    function coordsToSvg(lat, lng) {
+      const x = ((lng + 180) / 360) * 800;
+      const y = ((90 - lat) / 180) * 400;
+      return { x, y };
+    }
+
+    /**
+     * Converts SVG (X, Y) pixel coords back to Latitude and Longitude.
+     */
+    function svgToCoords(x, y) {
+      const lng = (x / 800) * 360 - 180;
+      const lat = 90 - (y / 400) * 180;
+      return {
+        lat: Math.max(-90, Math.min(90, lat)),
+        lng: Math.max(-180, Math.min(180, lng))
+      };
+    }
+
+    /**
+     * Formats coordinate numbers with Hemispheric indicators (N/S, E/W).
+     */
+    function formatCoord(val, isLat) {
+      const abs = Math.abs(val).toFixed(1);
+      if (isLat) {
+        if (Math.abs(val) < 0.05) return "0.0° EQ";
+        return val > 0 ? `${abs}° N` : `${abs}° S`;
+      } else {
+        if (Math.abs(val) < 0.05) return "0.0° PM";
+        return val > 0 ? `${abs}° E` : `${abs}° W`;
+      }
+    }
+
+    function renderMapLayers() {
+      const showEquator = document.getElementById('toggle-equator').checked;
+      const showMeridian = document.getElementById('toggle-meridian').checked;
+      const showGrid = document.getElementById('toggle-grid').checked;
+
+      document.getElementById('svg-equator').style.display = showEquator ? 'block' : 'none';
+      document.getElementById('svg-meridian').style.display = showMeridian ? 'block' : 'none';
+
+      const gridLayer = document.getElementById('layer-grid');
+      gridLayer.innerHTML = '';
+
+      if (showGrid) {
+        // Draw Parallels of Latitude every 30°
+        for (let lat = -60; lat <= 60; lat += 30) {
+          if (lat === 0) continue; // Equator drawn separately
+          const { y } = coordsToSvg(lat, 0);
+          const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          line.setAttribute("x1", "0");
+          line.setAttribute("y1", y);
+          line.setAttribute("x2", "800");
+          line.setAttribute("y2", y);
+          line.setAttribute("class", "map-graticule");
+          gridLayer.appendChild(line);
+
+          // Lat Label
+          const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          text.setAttribute("x", "8");
+          text.setAttribute("y", y - 3);
+          text.setAttribute("fill", "#64748b");
+          text.setAttribute("font-size", "9");
+          text.setAttribute("font-family", "monospace");
+          text.textContent = lat > 0 ? `${lat}°N` : `${Math.abs(lat)}°S`;
+          gridLayer.appendChild(text);
+        }
+
+        // Draw Meridians of Longitude every 45°
+        for (let lng = -135; lng <= 135; lng += 45) {
+          if (lng === 0) continue; // Prime Meridian drawn separately
+          const { x } = coordsToSvg(0, lng);
+          const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          line.setAttribute("x1", x);
+          line.setAttribute("y1", "0");
+          line.setAttribute("x2", x);
+          line.setAttribute("y2", "400");
+          line.setAttribute("class", "map-graticule");
+          gridLayer.appendChild(line);
+
+          // Lng Label
+          const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          text.setAttribute("x", x + 3);
+          text.setAttribute("y", "12");
+          text.setAttribute("fill", "#64748b");
+          text.setAttribute("font-size", "9");
+          text.setAttribute("font-family", "monospace");
+          text.textContent = lng > 0 ? `${lng}°E` : `${Math.abs(lng)}°W`;
+          gridLayer.appendChild(text);
+        }
+      }
+    }
+
+    /**
+     * Initializes preset markers on the map
+     */
+    function renderPresets() {
+      const pinLayer = document.getElementById('layer-preset-pins');
+      const presetButtonsContainer = document.getElementById('preset-buttons-container');
+      pinLayer.innerHTML = '';
+      presetButtonsContainer.innerHTML = '';
+
+      PRESETS.forEach((item, index) => {
+        const { x, y } = coordsToSvg(item.lat, item.lng);
+
+        // SVG Pin
+        const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        g.setAttribute("class", "cursor-pointer group");
+        g.onclick = (e) => {
+          e.stopPropagation();
+          selectPreset(index);
+        };
+
+        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.setAttribute("cx", x);
+        circle.setAttribute("cy", y);
+        circle.setAttribute("r", "5");
+        circle.setAttribute("fill", "#38bdf8");
+        circle.setAttribute("stroke", "#ffffff");
+        circle.setAttribute("stroke-width", "1.5");
+
+        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        text.setAttribute("x", x + 7);
+        text.setAttribute("y", y + 3);
+        text.setAttribute("fill", "#cbd5e1");
+        text.setAttribute("font-size", "9");
+        text.setAttribute("font-weight", "600");
+        text.textContent = item.name;
+
+        g.appendChild(circle);
+        g.appendChild(text);
+        pinLayer.appendChild(g);
+
+        // Bottom quick preset buttons
+        const btn = document.createElement("button");
+        btn.className = "px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-medium whitespace-nowrap transition";
+        btn.textContent = item.name;
+        btn.onclick = () => selectPreset(index);
+        presetButtonsContainer.appendChild(btn);
+      });
+    }
+
+    function updateActivePin(lat, lng, label = "Selected Point") {
+      state.activeCoords = { lat, lng };
+      
+      // Update telemetry readouts
+      document.getElementById('readout-lat').textContent = formatCoord(lat, true);
+      document.getElementById('readout-lng').textContent = formatCoord(lng, false);
+
+      // Render Active Ping Pin on SVG
+      const activeLayer = document.getElementById('layer-active-pin');
+      activeLayer.innerHTML = '';
+
+      const { x, y } = coordsToSvg(lat, lng);
+
+      // Pulse ring
+      const pulseRing = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      pulseRing.setAttribute("cx", x);
+      pulseRing.setAttribute("cy", y);
+      pulseRing.setAttribute("r", "12");
+      pulseRing.setAttribute("fill", "none");
+      pulseRing.setAttribute("stroke", "#f59e0b");
+      pulseRing.setAttribute("stroke-width", "2");
+      pulseRing.setAttribute("class", "pin-pulse");
+
+      // Pin center dot
+      const centerDot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      centerDot.setAttribute("cx", x);
+      centerDot.setAttribute("cy", y);
+      centerDot.setAttribute("r", "5.5");
+      centerDot.setAttribute("fill", "#f59e0b");
+      centerDot.setAttribute("stroke", "#ffffff");
+      centerDot.setAttribute("stroke-width", "2");
+
+      activeLayer.appendChild(pulseRing);
+      activeLayer.appendChild(centerDot);
+
+      // Log in Phase 1 if appropriate
+      if (state.currentPhase === 1) {
+        logObservation(lat, lng, label);
+      }
+
+      // Check Mission target in Phase 4 if active
+      if (state.currentPhase === 4) {
+        checkMissionClick(lat, lng);
+      }
+    }
+
+    function handleMapClick(event) {
+      const svg = document.getElementById('world-map-svg');
+      const rect = svg.getBoundingClientRect();
+      const clickX = event.clientX - rect.left;
+      const clickY = event.clientY - rect.top;
+
+      // Scale to 800x400 SVG coordinates
+      const svgX = (clickX / rect.width) * 800;
+      const svgY = (clickY / rect.height) * 400;
+
+      const { lat, lng } = svgToCoords(svgX, svgY);
+      updateActivePin(lat, lng, "Custom Dropped Pin");
+    }
+
+    function selectPreset(index) {
+      const preset = PRESETS[index];
+      updateActivePin(preset.lat, preset.lng, preset.name);
+    }
+
+    function nudgeActivePin(deltaLat, deltaLng) {
+      let newLat = state.activeCoords.lat + deltaLat;
+      let newLng = state.activeCoords.lng + deltaLng;
+
+      // Wrap longitude and clamp latitude
+      if (newLat > 90) newLat = 90;
+      if (newLat < -90) newLat = -90;
+      if (newLng > 180) newLng = -180 + (newLng - 180);
+      if (newLng < -180) newLng = 180 + (newLng + 180);
+
+      updateActivePin(newLat, newLng, "Nudged Position");
+    }
+
+    function resetPinToZero() {
+      updateActivePin(0, 0, "Null Island (0,0)");
+    }
+
+    // Hover tooltip coordinate tracking
+    const svgMap = document.getElementById('world-map-svg');
+    svgMap.addEventListener('mousemove', (e) => {
+      const rect = svgMap.getBoundingClientRect();
+      const svgX = ((e.clientX - rect.left) / rect.width) * 800;
+      const svgY = ((e.clientY - rect.top) / rect.height) * 400;
+      const coords = svgToCoords(svgX, svgY);
+      document.getElementById('map-hover-coords').textContent = 
+        `Coordinates: ${formatCoord(coords.lat, true)} , ${formatCoord(coords.lng, false)}`;
+    });
+
+    function logObservation(lat, lng, label) {
+      // Prevent duplicate logging of identical spot
+      const exists = state.loggedPoints.some(p => Math.abs(p.lat - lat) < 0.2 && Math.abs(p.lng - lng) < 0.2);
+      if (!exists) {
+        state.loggedPoints.unshift({ lat, lng, label });
+        addScore(10);
+      }
+
+      const logContainer = document.getElementById('observation-log');
+      logContainer.innerHTML = '';
+
+      state.loggedPoints.slice(0, 5).forEach(point => {
+        const item = document.createElement('div');
+        item.className = "flex items-center justify-between p-2 rounded-lg bg-slate-950/70 border border-slate-800/80 text-xs";
+        item.innerHTML = `
+          <div class="font-medium text-slate-300 truncate max-w-[120px]">${point.label}</div>
+          <div class="font-mono text-slate-400">
+            <span class="text-red-400 font-semibold">${formatCoord(point.lat, true)}</span>, 
+            <span class="text-sky-400 font-semibold">${formatCoord(point.lng, false)}</span>
+          </div>
+        `;
+        logContainer.appendChild(item);
+      });
+
+      document.getElementById('log-count').textContent = `${Math.min(state.loggedPoints.length, 3)} / 3 logged`;
+      if (state.loggedPoints.length >= 3) {
+        document.getElementById('log-count').classList.add('text-emerald-400');
+      }
+    }
+
+    function checkHypothesisItem(qNum, value, btn) {
+      const p1Btns = document.querySelectorAll('.hypo-opt-1');
+      const p2Btns = document.querySelectorAll('.hypo-opt-2');
+
+      if (qNum === 1) {
+        p1Btns.forEach(b => b.className = "hypo-opt-1 py-1.5 px-2 bg-slate-800 rounded-lg text-slate-300 border border-slate-700");
+        const fb = document.getElementById('hypo-feedback-1');
+        fb.classList.remove('hidden');
+
+        if (value === 'increases') {
+          btn.className = "hypo-opt-1 py-1.5 px-2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 rounded-lg font-semibold";
+          fb.className = "text-[11px] text-emerald-400 font-medium";
+          fb.textContent = "✓ Spot on! Latitude starts at 0° at the Equator and counts up to 90°N at the North Pole.";
+          state.hypoChecks.q1 = true;
+          addScore(15);
+        } else {
+          btn.className = "hypo-opt-1 py-1.5 px-2 bg-rose-500/20 text-rose-300 border border-rose-500/50 rounded-lg";
+          fb.className = "text-[11px] text-rose-400 font-medium";
+          fb.textContent = "Observe again: When you nudge North from 0°, the number increases towards 90°N.";
+          state.hypoChecks.q1 = false;
+        }
+      }
+
+      if (qNum === 2) {
+        p2Btns.forEach(b => b.className = "hypo-opt-2 py-1.5 px-2 bg-slate-800 rounded-lg text-slate-300 border border-slate-700");
+        const fb = document.getElementById('hypo-feedback-2');
+        fb.classList.remove('hidden');
+
+        if (value === 'first') {
+          btn.className = "hypo-opt-2 py-1.5 px-2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 rounded-lg font-semibold";
+          fb.className = "text-[11px] text-emerald-400 font-medium";
+          fb.textContent = "✓ Correct! In coordinate notation (Lat, Lng), the first value always reveals North/South position.";
+          state.hypoChecks.q2 = true;
+          addScore(15);
+        } else {
+          btn.className = "hypo-opt-2 py-1.5 px-2 bg-rose-500/20 text-rose-300 border border-rose-500/50 rounded-lg";
+          fb.className = "text-[11px] text-rose-400 font-medium";
+          fb.textContent = "Remember: Longitude measures East/West. The first value (Latitude) handles North/South.";
+          state.hypoChecks.q2 = false;
+        }
+      }
+    }
+
+    function validateMasterRule() {
+      const sel1 = document.getElementById('rule-select-1').value;
+      const sel2 = document.getElementById('rule-select-2').value;
+      const feedback = document.getElementById('rule-feedback');
+      feedback.classList.remove('hidden');
+
+      if (sel1 === 'first' && sel2 === 'second') {
+        feedback.className = "text-xs font-semibold text-emerald-400 p-2 bg-emerald-950/40 border border-emerald-500/40 rounded-lg";
+        feedback.textContent = "✓ Master Rule Formulated! Latitude is coordinate #1 (from Equator), Longitude is coordinate #2 (from Prime Meridian).";
+        state.hypoChecks.ruleMastered = true;
+        addScore(30);
+      } else {
+        feedback.className = "text-xs font-semibold text-rose-400 p-2 bg-rose-950/40 border border-rose-500/40 rounded-lg";
+        feedback.textContent = "Review your choices: Coordinates are written as (Latitude, Longitude) or (N/S, E/W).";
+      }
+    }
+
+    function loadTestQuestion() {
+      const test = TESTS[state.currentTestIdx];
+      document.getElementById('test-counter').textContent = `Test ${state.currentTestIdx + 1} of ${TESTS.length}`;
+      document.getElementById('test-target-desc').textContent = test.question;
+
+      const optGrid = document.getElementById('test-options-grid');
+      optGrid.innerHTML = '';
+      const expBox = document.getElementById('test-explanation');
+      expBox.classList.add('hidden');
+
+      test.options.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = "p-2 text-left rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition";
+        btn.textContent = opt.text;
+        btn.onclick = () => submitTestAnswer(opt.correct, test.explanation, btn);
+        optGrid.appendChild(btn);
+      });
+    }
+
+    function submitTestAnswer(isCorrect, explanation, selectedBtn) {
+      const expBox = document.getElementById('test-explanation');
+      expBox.classList.remove('hidden');
+
+      if (isCorrect) {
+        selectedBtn.classList.remove('bg-slate-800');
+        selectedBtn.classList.add('bg-emerald-500/20', 'border-emerald-500', 'text-emerald-300');
+        expBox.className = "text-xs p-2.5 rounded-lg font-medium bg-emerald-950/40 text-emerald-300 border border-emerald-500/30";
+        expBox.innerHTML = `<strong>Correct!</strong> ${explanation}`;
+        state.testCorrectCount++;
+        addScore(25);
+
+        setTimeout(() => {
+          if (state.currentTestIdx < TESTS.length - 1) {
+            state.currentTestIdx++;
+            loadTestQuestion();
+          } else {
+            expBox.innerHTML += `<div class="mt-2 text-emerald-400 font-bold">All tests passed! Ready for Missions.</div>`;
+          }
+        }, 1500);
+      } else {
+        selectedBtn.classList.remove('bg-slate-800');
+        selectedBtn.classList.add('bg-rose-500/20', 'border-rose-500', 'text-rose-300');
+        expBox.className = "text-xs p-2.5 rounded-lg font-medium bg-rose-950/40 text-rose-300 border border-rose-500/30";
+        expBox.innerHTML = `<strong>Try again:</strong> ${explanation}`;
+      }
+    }
+
+    function loadMission() {
+      const mission = MISSIONS[state.currentMissionIdx];
+      document.getElementById('mission-badge').textContent = `Mission ${state.currentMissionIdx + 1}`;
+      document.getElementById('mission-progress-label').textContent = `${state.missionCompletedCount} / ${MISSIONS.length} Completed`;
+      document.getElementById('mission-title').textContent = mission.title;
+      document.getElementById('mission-prompt').textContent = mission.prompt;
+      
+      const actionArea = document.getElementById('mission-action-area');
+      actionArea.innerHTML = `
+        <div class="text-[11px] text-amber-300 bg-amber-950/30 border border-amber-500/30 p-2.5 rounded-lg flex items-center gap-2">
+          <svg class="w-4 h-4 shrink-0 text-amber-400 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
+          <span><strong>Action:</strong> Click on the map target. Clue: ${mission.hint}</span>
+        </div>
+      `;
+
+      const fb = document.getElementById('mission-feedback');
+      fb.classList.add('hidden');
+    }
+
+    function checkMissionClick(lat, lng) {
+      if (state.currentPhase !== 4) return;
+      const mission = MISSIONS[state.currentMissionIdx];
+      const dLat = Math.abs(lat - mission.targetLat);
+      const dLng = Math.abs(lng - mission.targetLng);
+      const fb = document.getElementById('mission-feedback');
+      fb.classList.remove('hidden');
+
+      // Check distance within tolerance
+      if (dLat <= mission.tolerance && dLng <= mission.tolerance) {
+        fb.className = "text-xs p-2.5 rounded-lg font-medium bg-emerald-950/40 text-emerald-300 border border-emerald-500/30";
+        fb.innerHTML = `<strong>Mission Target Acquired!</strong> Outstanding navigation. Coordinates matched within acceptable proximity.`;
+        addScore(35);
+        state.missionCompletedCount++;
+
+        setTimeout(() => {
+          if (state.currentMissionIdx < MISSIONS.length - 1) {
+            state.currentMissionIdx++;
+            loadMission();
+          } else {
+            fb.innerHTML = `<strong>All 4 Missions Complete!</strong> You are ready for final inductive synthesis.`;
+          }
+        }, 1600);
+      } else {
+        fb.className = "text-xs p-2.5 rounded-lg font-medium bg-amber-950/40 text-amber-300 border border-amber-500/30";
+        fb.innerHTML = `You clicked near (${formatCoord(lat, true)}, ${formatCoord(lng, false)}). Keep looking! ${mission.hint}`;
+      }
+    }
+
+    function handleSynthesisSubmit(e) {
+      e.preventDefault();
+      const latDir = document.getElementById('syn-lat-dir').value;
+      const latRef = document.getElementById('syn-lat-ref').value;
+      const lngDir = document.getElementById('syn-lng-dir').value;
+      const lngRef = document.getElementById('syn-lng-ref').value;
+
+      if (latDir === 'ns' && latRef === 'eq' && lngDir === 'ew' && lngRef === 'pm') {
+        addScore(50);
+        renderCertificate();
+      } else {
+        const form = document.getElementById('synthesis-form');
+        const alert = document.createElement('div');
+        alert.className = "text-xs text-rose-400 p-2 bg-rose-950/40 border border-rose-500/40 rounded-lg";
+        alert.textContent = "Check your generalizations: Latitude runs North/South from the Equator (0°), while Longitude runs East/West from the Prime Meridian (0°).";
+        form.appendChild(alert);
+        setTimeout(() => alert.remove(), 4000);
+      }
+    }
+
+    function renderCertificate() {
+      document.getElementById('synthesis-form').classList.add('hidden');
+      const certOutput = document.getElementById('certificate-output');
+      certOutput.classList.remove('hidden');
+
+      certOutput.innerHTML = `
+        <div class="bg-gradient-to-b from-slate-900 to-slate-950 border-2 border-amber-400/60 rounded-2xl p-6 text-center space-y-4 shadow-2xl relative overflow-hidden">
+          <div class="absolute -top-10 -right-10 w-32 h-32 bg-amber-400/10 rounded-full blur-2xl"></div>
+          <div class="w-12 h-12 mx-auto rounded-full bg-amber-400/20 text-amber-400 flex items-center justify-center font-bold text-xl">
+            ★
+          </div>
+          <div>
+            <span class="text-[10px] uppercase tracking-widest text-amber-400 font-bold">Certificate of Geographic Mastery</span>
+            <h3 class="text-xl font-black text-white mt-1">Certified Coordinate Navigator</h3>
+            <p class="text-xs text-slate-400">Successfully derived geographic coordinates inductively from empirical observation</p>
+          </div>
+
+          <div class="bg-slate-950/70 border border-slate-800 p-3 rounded-xl text-left space-y-1.5 text-xs">
+            <div class="text-slate-300 font-medium">✓ <strong>Latitude:</strong> Measures North & South from the Equator (0° to 90°)</div>
+            <div class="text-slate-300 font-medium">✓ <strong>Longitude:</strong> Measures East & West from the Prime Meridian (0° to 180°)</div>
+            <div class="text-slate-300 font-medium">✓ <strong>Philippines Clue Mission:</strong> Successfully pinpointed at approx. 14°N, 121°E</div>
+          </div>
+
+          <div class="flex items-center justify-between text-xs pt-2 border-t border-slate-800">
+            <span class="text-slate-400">Final Score: <strong class="text-emerald-400 font-mono text-sm">${state.score} pts</strong></span>
+            <button onclick="window.print()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold transition border border-slate-700">
+              Save Certificate
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    const PHASE_METADATA = {
+      1: {
+        tag: "Phase 1: Exploration",
+        title: "Investigate Coordinate Patterns",
+        desc: "Click preset city pins or drop custom pins across the map. Observe how coordinate values tick as you head North, South, East, and West."
+      },
+      2: {
+        tag: "Phase 2: Hypothesize",
+        title: "Formulate Your Geographical Rules",
+        desc: "Convert your observations into hypotheses. What do numbers above the Equator share in common? Construct a working rule."
+      },
+      3: {
+        tag: "Phase 3: Test & Predict",
+        title: "Test Your Theory with Challenges",
+        desc: "Evaluate your proposed coordinate rule against rapid-fire hemisphere and position challenges."
+      },
+      4: {
+        tag: "Phase 4: Discover & Apply",
+        title: "Coordinate Quest Missions",
+        desc: "Put your geographic reasoning to work: locate coordinates, identify quadrants, and locate the Philippines using coordinate clues."
+      },
+      5: {
+        tag: "Phase 5: Conclusion & Generalization",
+        title: "Inductive Synthesis & Mastery",
+        desc: "Finalize your general theory of Latitude and Longitude to earn your certified mastery badge."
+      }
+    };
+
+    function switchPhase(phaseNum) {
+      state.currentPhase = phaseNum;
+
+      // Update Phase Tab Buttons
+      for (let i = 1; i <= 5; i++) {
+        const btn = document.getElementById(`step-btn-i`.replace('i', i));
+        const card = document.getElementById(`phase-card-i`.replace('i', i));
+        if (i === phaseNum) {
+          btn.className = "phase-tab px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all bg-amber-500 text-slate-950 shadow-md";
+          card.classList.remove('hidden');
+        } else {
+          btn.className = "phase-tab px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all bg-slate-800 text-slate-400 hover:text-slate-200";
+          card.classList.add('hidden');
+        }
+      }
+
+      // Update Guidance Banner
+      const meta = PHASE_METADATA[phaseNum];
+      document.getElementById('banner-tag').textContent = meta.tag;
+      document.getElementById('banner-title').textContent = meta.title;
+      document.getElementById('banner-desc').textContent = meta.desc;
+
+      // Phase specific initializers
+      if (phaseNum === 3) loadTestQuestion();
+      if (phaseNum === 4) loadMission();
+    }
+
+    function advanceToNextPhase() {
+      if (state.currentPhase < 5) {
+        switchPhase(state.currentPhase + 1);
+      }
+    }
+
+    function addScore(points) {
+      state.score += points;
+      document.getElementById('quest-score').textContent = `${state.score} pts`;
+    }
+
+    // App Initialization
+    window.addEventListener('DOMContentLoaded', () => {
+      renderMapLayers();
+      renderPresets();
+      updateActivePin(14.6, 120.98, "Manila (Philippines)");
+      switchPhase(1);
+    });
+  </script>
+</body>
+</html>
